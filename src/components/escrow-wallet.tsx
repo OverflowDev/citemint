@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
 import { formatUnits, parseUnits } from "viem";
 import { arcTestnet } from "viem/chains";
-import { ARC_EXPLORER, ARC_USDC_ADDRESS, CITEMINT_ESCROW_ADDRESS, escrowAbi, getArcPublicClient, usdcAbi } from "@/lib/arc-contract";
+import { ARC_EXPLORER, ARC_USDC_ADDRESS, ACTIVE_ESCROW_ADDRESS, escrowAbi, getArcPublicClient, usdcAbi } from "@/lib/arc-contract";
 import { useArcWallet } from "@/components/arc-wallet-provider";
 import { Card } from "@/components/ui";
 import { shortWallet } from "@/lib/money";
@@ -19,12 +19,12 @@ export function EscrowWallet() {
   const [busy, setBusy] = useState("");
 
   const refresh = useCallback(async () => {
-    if (!address || !CITEMINT_ESCROW_ADDRESS) return;
+    if (!address || !ACTIVE_ESCROW_ADDRESS) return;
     const client = getArcPublicClient();
     const [wallet, escrow, allowance] = await Promise.all([
       client.readContract({ address: ARC_USDC_ADDRESS, abi: usdcAbi, functionName: "balanceOf", args: [address] }),
-      client.readContract({ address: CITEMINT_ESCROW_ADDRESS, abi: escrowAbi, functionName: "balances", args: [address] }),
-      client.readContract({ address: ARC_USDC_ADDRESS, abi: usdcAbi, functionName: "allowance", args: [address, CITEMINT_ESCROW_ADDRESS] }),
+      client.readContract({ address: ACTIVE_ESCROW_ADDRESS, abi: escrowAbi, functionName: "balances", args: [address] }),
+      client.readContract({ address: ARC_USDC_ADDRESS, abi: usdcAbi, functionName: "allowance", args: [address, ACTIVE_ESCROW_ADDRESS] }),
     ]);
     setBalances({ wallet, escrow, allowance });
   }, [address]);
@@ -67,11 +67,11 @@ export function EscrowWallet() {
       const publicClient = getArcPublicClient();
       if (balances.allowance < value) {
         notify("Confirm the USDC spending approval in your wallet.", "info");
-        const approval = await wallet.writeContract({ account, chain: arcTestnet, address: ARC_USDC_ADDRESS, abi: usdcAbi, functionName: "approve", args: [CITEMINT_ESCROW_ADDRESS, value] });
+        const approval = await wallet.writeContract({ account, chain: arcTestnet, address: ARC_USDC_ADDRESS, abi: usdcAbi, functionName: "approve", args: [ACTIVE_ESCROW_ADDRESS, value] });
         await publicClient.waitForTransactionReceipt({ hash: approval });
       }
       notify("Approval confirmed. Now confirm the escrow deposit.", "info");
-      const hash = await wallet.writeContract({ account, chain: arcTestnet, address: CITEMINT_ESCROW_ADDRESS, abi: escrowAbi, functionName: "deposit", args: [value] });
+      const hash = await wallet.writeContract({ account, chain: arcTestnet, address: ACTIVE_ESCROW_ADDRESS, abi: escrowAbi, functionName: "deposit", args: [value] });
       await publicClient.waitForTransactionReceipt({ hash });
       await Promise.all([refresh(), refreshEscrowBalance()]);
       notify(`Deposit confirmed on Arc: ${hash.slice(0, 10)}…`, "success");
@@ -85,7 +85,7 @@ export function EscrowWallet() {
       const account = await ensureArc();
       const value = parseUnits(amount, 6);
       if (value <= 0n || value > balances.escrow) throw new Error("Enter an amount within your escrow balance.");
-      const hash = await getWalletClient().writeContract({ account, chain: arcTestnet, address: CITEMINT_ESCROW_ADDRESS, abi: escrowAbi, functionName: "withdraw", args: [value] });
+      const hash = await getWalletClient().writeContract({ account, chain: arcTestnet, address: ACTIVE_ESCROW_ADDRESS, abi: escrowAbi, functionName: "withdraw", args: [value] });
       await getArcPublicClient().waitForTransactionReceipt({ hash });
       await Promise.all([refresh(), refreshEscrowBalance()]);
       notify(`Withdrawal confirmed on Arc: ${hash.slice(0, 10)}…`, "success");
@@ -104,7 +104,7 @@ export function EscrowWallet() {
       <label className="label mt-4" htmlFor="escrow-amount">Amount (USDC)</label><input id="escrow-amount" className="input" type="number" min="0.000001" step="0.000001" value={amount} onChange={(event) => setAmount(event.target.value)} />
       <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={deposit} disabled={!address || !!busy} className="button button-dark">{busy === "deposit" ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}Approve & deposit</button><button onClick={withdraw} disabled={!address || !!busy || balances.escrow === 0n} className="button button-outline">{busy === "withdraw" ? <LoaderCircle size={14} className="animate-spin" /> : null}Withdraw</button></div>
       {busy && <p className="mt-3 text-xs font-medium text-slate-500">Waiting for Arc confirmation. Keep this page open…</p>}
-      {CITEMINT_ESCROW_ADDRESS && <a className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-[#39745e]" href={`${ARC_EXPLORER}/address/${CITEMINT_ESCROW_ADDRESS}`} target="_blank" rel="noreferrer">View escrow on ArcScan <ExternalLink size={11} /></a>}
+      {ACTIVE_ESCROW_ADDRESS && <a className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-[#39745e]" href={`${ARC_EXPLORER}/address/${ACTIVE_ESCROW_ADDRESS}`} target="_blank" rel="noreferrer">View escrow on ArcScan <ExternalLink size={11} /></a>}
     </div>
   </Card>;
 }

@@ -34,8 +34,11 @@ body {
 .button-outline { border: 1px solid #dfe4ea; background: white; color: #425066; }
 .button-outline:hover { border-color: #bbc4cf; background: #f9fafb; }
 .button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
-.input { width: 100%; min-height: 44px; border: 1px solid #dfe4ea; border-radius: 11px; background: white; padding: 10px 13px; font-size: 14px; outline: none; transition: border .15s, box-shadow .15s; }
-.input:focus { border-color: #7c9c8e; box-shadow: 0 0 0 3px rgba(75, 127, 105, .1); }
+@layer components {
+  /* In the components layer so padding utilities (e.g. pl-9 for a leading icon) can override. */
+  .input { width: 100%; min-height: 44px; border: 1px solid #dfe4ea; border-radius: 11px; background: white; padding: 10px 13px; font-size: 14px; outline: none; transition: border .15s, box-shadow .15s; }
+  .input:focus { border-color: #7c9c8e; box-shadow: 0 0 0 3px rgba(75, 127, 105, .1); }
+}
 .label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 650; color: #465367; }
 .badge { display: inline-flex; align-items: center; border-radius: 999px; background: #f0f2f5; padding: 4px 8px; font-size: 10px; font-weight: 700; letter-spacing: .035em; text-transform: uppercase; color: #697487; }
 .badge-green { background: #e5f8eb; color: #23724b; }

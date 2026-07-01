@@ -1,8 +1,9 @@
 import { getAddress, isAddress } from "viem";
 import { z } from "zod";
-import { createAuthorizationMessage } from "@/lib/agent-authorization";
+import { createAuthorizationMessage, createSpendAuthorization } from "@/lib/agent-authorization";
 import { db } from "@/lib/db";
 import { usdcToMicros } from "@/lib/money";
+import { configuredPaymentMode } from "@/lib/payment";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -22,6 +23,16 @@ export async function POST(request: Request) {
     const walletAddress = getAddress(input.walletAddress.toLowerCase());
     const maxBudgetMicros = usdcToMicros(input.maxBudget);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    if (configuredPaymentMode() === "contract-v2") {
+      // v2: the payer signs an EIP-712 budget voucher that the escrow verifies on-chain.
+      const { nonce, questionHash, typedData } = createSpendAuthorization({ walletAddress, question: input.question, maxTotalMicros: maxBudgetMicros, expiresAt });
+      const record = await db.agentAuthorization.create({
+        data: { walletAddress, maxBudgetMicros, expiresAt, nonce, questionHash, message: JSON.stringify(typedData.message) },
+      });
+      return Response.json({ authorizationId: record.id, typedData, expiresAt });
+    }
+
     const authorization = createAuthorizationMessage({ walletAddress, question: input.question, maxBudgetMicros, expiresAt });
     const record = await db.agentAuthorization.create({
       data: { walletAddress, maxBudgetMicros, expiresAt, ...authorization },

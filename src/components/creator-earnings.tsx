@@ -1,0 +1,93 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { BarChart3, Bot, CircleDollarSign, ExternalLink, FileText, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
+import { ARC_EXPLORER } from "@/lib/arc-contract";
+import { useArcWallet } from "@/components/arc-wallet-provider";
+import { Badge, Card } from "@/components/ui";
+import { formatUsdc, shortWallet } from "@/lib/money";
+import { friendlyError } from "@/lib/friendly-error";
+
+type Earnings = {
+  registered: boolean;
+  name: string | null;
+  walletAddress: string;
+  totalEarnedMicros: number;
+  sourceCount: number;
+  citationCount: number;
+  distinctAgents: number;
+  perSource: { id: string; title: string; url: string; timesCited: number; totalMicros: number; lastCitedAt: string }[];
+  ledger: { id: string; amountMicros: number; createdAt: string; txHash: string | null; receiptId: string; source: { title: string; url: string }; question: string }[];
+};
+
+const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
+
+export function CreatorEarnings() {
+  const { address, connect, connecting, notify } = useArcWallet();
+  const [data, setData] = useState<Earnings | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async (wallet: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/earnings?wallet=${wallet}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not load earnings.");
+      setData(body);
+    } catch (caught) {
+      notify(friendlyError(caught, "Could not load your earnings."), "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!address) { setData(null); return; }
+      void load(address);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [address, load]);
+
+  if (!address) {
+    return <Card className="flex flex-col items-center gap-3 p-8 text-center">
+      <div className="grid size-11 place-items-center rounded-xl bg-[#eef5f1] text-[#39745e]"><Wallet size={19} /></div>
+      <div><p className="text-sm font-semibold text-slate-800">See your creator earnings</p><p className="mt-1 text-xs text-slate-400">Connect the wallet you registered your sources with to view paid citations and usage.</p></div>
+      <button onClick={() => { void connect().catch((caught) => notify(friendlyError(caught, "We could not connect your wallet."), "error")); }} disabled={connecting} className="button button-dark">{connecting ? <LoaderCircle size={14} className="animate-spin" /> : <Wallet size={14} />}Connect wallet</button>
+    </Card>;
+  }
+
+  if (loading && !data) return <Card className="flex items-center justify-center gap-2 p-8 text-sm text-slate-400"><LoaderCircle size={15} className="animate-spin" />Loading your earnings…</Card>;
+
+  if (data && !data.registered) {
+    return <Card className="p-6"><p className="text-sm font-semibold text-slate-800">No sources registered for {shortWallet(address)}</p><p className="mt-1 text-xs text-slate-400">Register a source with this wallet to start earning citation payments.</p></Card>;
+  }
+
+  if (!data) return null;
+
+  const stats = [
+    { label: "Total earned", value: formatUsdc(data.totalEarnedMicros), icon: CircleDollarSign, note: "Arc Testnet USDC" },
+    { label: "Agents that cited you", value: String(data.distinctAgents), icon: Bot, note: "Distinct research runs" },
+    { label: "Paid citations", value: String(data.citationCount), icon: FileText, note: "Across all sources" },
+    { label: "Registered sources", value: String(data.sourceCount), icon: BarChart3, note: "Indexed for the agent" },
+  ];
+
+  return <Card className="overflow-hidden">
+    <div className="flex flex-col justify-between gap-3 border-b bg-[#fbfcfb] p-5 sm:flex-row sm:items-center">
+      <div><p className="text-sm font-semibold text-slate-800">{data.name || "Your"} earnings</p><p className="mt-1 font-mono text-[10px] text-slate-400">{shortWallet(address)}</p></div>
+      <button onClick={() => { void load(address); }} disabled={loading} className="button button-outline !min-h-9 !px-3">{loading ? <LoaderCircle size={13} className="animate-spin" /> : <RefreshCw size={13} />}Refresh</button>
+    </div>
+    <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">{stats.map((stat) => <div key={stat.label} className="rounded-xl bg-slate-50 p-4"><div className="flex items-center justify-between"><p className="text-[10px] uppercase tracking-wider text-slate-400">{stat.label}</p><stat.icon size={15} className="text-[#39745e]" /></div><p className="mt-2 text-2xl font-semibold text-slate-800">{stat.value}</p><p className="mt-0.5 text-[10px] text-slate-400">{stat.note}</p></div>)}</div>
+
+    {data.perSource.length > 0 && <div className="border-t p-5">
+      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Earnings by source</p>
+      <div className="table-wrap"><table><thead><tr><th>Source</th><th>Times cited</th><th>Last cited</th><th>Earned</th></tr></thead><tbody>{data.perSource.map((source) => <tr key={source.id}><td className="max-w-xs truncate font-semibold text-slate-650"><FileText size={13} className="mr-2 inline text-slate-400" /><a href={source.url} target="_blank" rel="noreferrer" className="hover:underline">{source.title}</a></td><td>{source.timesCited}</td><td className="text-xs text-slate-500">{dayFmt.format(new Date(source.lastCitedAt))}</td><td className="font-bold text-[#39745e]">{formatUsdc(source.totalMicros)}</td></tr>)}</tbody></table></div>
+    </div>}
+
+    <div className="border-t p-5">
+      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Payment ledger</p>
+      {data.ledger.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Source</th><th>Question</th><th>Amount</th><th>Receipt</th></tr></thead><tbody>{data.ledger.map((entry) => <tr key={entry.id}><td className="whitespace-nowrap text-xs text-slate-500">{dateFmt.format(new Date(entry.createdAt))}</td><td className="max-w-40 truncate font-semibold text-slate-650">{entry.source.title}</td><td className="max-w-xs truncate text-xs text-slate-500">{entry.question}</td><td className="font-bold text-[#39745e]">{formatUsdc(entry.amountMicros)}</td><td className="max-w-32 truncate font-mono text-[10px] text-slate-400">{entry.txHash ? <a href={`${ARC_EXPLORER}/tx/${entry.txHash}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">{entry.txHash.slice(0, 14)}… <ExternalLink size={10} /></a> : entry.receiptId}</td></tr>)}</tbody></table></div> : <div className="rounded-xl bg-slate-50 px-4 py-6 text-center text-xs text-slate-400"><Badge tone="neutral">No paid citations yet</Badge><p className="mt-2">When a research agent cites one of your sources, the dated receipt appears here.</p></div>}
+    </div>
+  </Card>;
+}

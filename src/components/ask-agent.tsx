@@ -20,7 +20,7 @@ type Result = {
 const demoQuestion = "How can nanopayments help independent writers and AI agents?";
 
 export function AskAgent() {
-  const { address, isArc, escrowBalance, refreshEscrowBalance, switchToArc, signMessage, notify } = useArcWallet();
+  const { address, isArc, escrowBalance, refreshEscrowBalance, switchToArc, signMessage, signTypedData, notify } = useArcWallet();
   const [question, setQuestion] = useState(demoQuestion);
   const [budget, setBudget] = useState("0.01");
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,14 @@ export function AskAgent() {
       const authorization = await authorizationResponse.json();
       if (!authorizationResponse.ok) throw new Error(authorization.error || "Could not create the payment authorization.");
       setStage(2);
-      const signature = await signMessage(authorization.message);
+      const signature = authorization.typedData
+        ? await signTypedData({
+            domain: authorization.typedData.domain,
+            types: authorization.typedData.types,
+            primaryType: authorization.typedData.primaryType,
+            message: { ...authorization.typedData.message, maxTotal: BigInt(authorization.typedData.message.maxTotal), deadline: BigInt(authorization.typedData.message.deadline) },
+          })
+        : await signMessage(authorization.message);
       setStage(3);
       const response = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, maxBudget: Number(budget), walletAddress: payer, authorizationId: authorization.authorizationId, signature }) });
       const body = await response.json();

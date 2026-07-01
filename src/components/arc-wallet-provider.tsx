@@ -4,9 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
 import { createWalletClient, custom, getAddress, type WalletClient } from "viem";
 import { arcTestnet } from "viem/chains";
-import { ARC_CHAIN_HEX, ARC_CHAIN_ID, ARC_EXPLORER, ARC_RPC_URL, CITEMINT_ESCROW_ADDRESS, escrowAbi, getArcPublicClient } from "@/lib/arc-contract";
+import { ARC_CHAIN_HEX, ARC_CHAIN_ID, ARC_EXPLORER, ARC_RPC_URL, ACTIVE_ESCROW_ADDRESS, escrowAbi, getArcPublicClient } from "@/lib/arc-contract";
 
 type ToastTone = "success" | "error" | "info";
+type TypedDataInput = { domain: Record<string, unknown>; types: Record<string, unknown>; primaryType: string; message: Record<string, unknown> };
 type Toast = { id: string; message: string; tone: ToastTone };
 type ArcWalletContextValue = {
   address: `0x${string}` | null;
@@ -21,6 +22,7 @@ type ArcWalletContextValue = {
   copyAddress: () => Promise<void>;
   switchToArc: () => Promise<void>;
   signMessage: (message: string) => Promise<`0x${string}`>;
+  signTypedData: (typedData: TypedDataInput) => Promise<`0x${string}`>;
   getWalletClient: () => WalletClient;
   refreshEscrowBalance: () => Promise<void>;
   notify: (message: string, tone?: ToastTone) => void;
@@ -44,8 +46,8 @@ export function ArcWalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (!CITEMINT_ESCROW_ADDRESS) return;
-      void getArcPublicClient().readContract({ address: CITEMINT_ESCROW_ADDRESS, abi: escrowAbi, functionName: "owner" }).then(setOwnerAddress).catch(() => undefined);
+      if (!ACTIVE_ESCROW_ADDRESS) return;
+      void getArcPublicClient().readContract({ address: ACTIVE_ESCROW_ADDRESS, abi: escrowAbi, functionName: "owner" }).then(setOwnerAddress).catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -63,8 +65,8 @@ export function ArcWalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshEscrowBalance = useCallback(async () => {
-    if (!address || !CITEMINT_ESCROW_ADDRESS) { setEscrowBalance(0n); return; }
-    const balance = await getArcPublicClient().readContract({ address: CITEMINT_ESCROW_ADDRESS, abi: escrowAbi, functionName: "balances", args: [address] });
+    if (!address || !ACTIVE_ESCROW_ADDRESS) { setEscrowBalance(0n); return; }
+    const balance = await getArcPublicClient().readContract({ address: ACTIVE_ESCROW_ADDRESS, abi: escrowAbi, functionName: "balances", args: [address] });
     setEscrowBalance(balance);
   }, [address]);
 
@@ -116,8 +118,14 @@ export function ArcWalletProvider({ children }: { children: ReactNode }) {
     return getWalletClient().signMessage({ account, message });
   }, [address, chainId, connect, getWalletClient, switchToArc]);
 
+  const signTypedData = useCallback(async (typedData: TypedDataInput) => {
+    const account = address || await connect();
+    if (chainId !== ARC_CHAIN_ID) await switchToArc();
+    return getWalletClient().signTypedData({ account, ...typedData } as never);
+  }, [address, chainId, connect, getWalletClient, switchToArc]);
+
   const isOwner = !!address && !!ownerAddress && address.toLowerCase() === ownerAddress.toLowerCase();
-  const value = useMemo(() => ({ address, chainId, connecting, isArc: chainId === ARC_CHAIN_ID, ownerAddress, isOwner, escrowBalance, connect, disconnect, copyAddress, switchToArc, signMessage, getWalletClient, refreshEscrowBalance, notify }), [address, chainId, connecting, ownerAddress, isOwner, escrowBalance, connect, disconnect, copyAddress, switchToArc, signMessage, getWalletClient, refreshEscrowBalance, notify]);
+  const value = useMemo(() => ({ address, chainId, connecting, isArc: chainId === ARC_CHAIN_ID, ownerAddress, isOwner, escrowBalance, connect, disconnect, copyAddress, switchToArc, signMessage, signTypedData, getWalletClient, refreshEscrowBalance, notify }), [address, chainId, connecting, ownerAddress, isOwner, escrowBalance, connect, disconnect, copyAddress, switchToArc, signMessage, signTypedData, getWalletClient, refreshEscrowBalance, notify]);
   return <ArcWalletContext.Provider value={value}>{children}<div className="fixed bottom-5 right-5 z-[100] flex w-[min(380px,calc(100vw-40px))] flex-col gap-3">{toasts.map((toast) => { const Icon = toast.tone === "success" ? CheckCircle2 : toast.tone === "error" ? AlertCircle : Info; return <div key={toast.id} className={`flex items-start gap-3 rounded-2xl border p-4 shadow-xl backdrop-blur ${toast.tone === "success" ? "border-emerald-200 bg-emerald-50/95 text-emerald-900" : toast.tone === "error" ? "border-red-200 bg-red-50/95 text-red-900" : "border-slate-200 bg-white/95 text-slate-700"}`}><Icon size={19} className="mt-0.5 shrink-0" /><p className="flex-1 text-sm font-medium leading-5">{toast.message}</p><button aria-label="Dismiss alert" onClick={() => setToasts((items) => items.filter((item) => item.id !== toast.id))}><X size={15} /></button></div>; })}</div></ArcWalletContext.Provider>;
 }
 

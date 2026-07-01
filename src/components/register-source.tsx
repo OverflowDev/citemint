@@ -11,7 +11,7 @@ const initial = { creatorName: "", walletAddress: "", url: "", price: "0.0001", 
 type WalletProof = { challengeId: string; signature: string };
 
 export function RegisterSource() {
-  const { address, getWalletClient } = useArcWallet();
+  const { address, getWalletClient, notify } = useArcWallet();
   const [form, setForm] = useState(initial);
   const [walletProof, setWalletProof] = useState<WalletProof | null>(null);
   const [signing, setSigning] = useState(false);
@@ -50,9 +50,12 @@ export function RegisterSource() {
       const signature = await getWalletClient().signMessage({ account: walletAddress, message: challenge.message });
       setForm((value) => ({ ...value, walletAddress }));
       setWalletProof({ challengeId: challenge.challengeId, signature });
+      notify("Wallet ownership verified. You can register your source now.", "success");
     } catch (caught) {
       setWalletProof(null);
-      setError(caught instanceof Error ? caught.message : "Wallet connection was cancelled.");
+      const message = caught instanceof Error ? caught.message : "Wallet connection was cancelled.";
+      setError(message);
+      notify(message, "error");
     } finally {
       setSigning(false);
     }
@@ -83,8 +86,11 @@ export function RegisterSource() {
       setCreated(body);
       setForm(initial);
       setWalletProof(null);
+      notify("Source registered and indexed for the research agent.", "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Registration failed.");
+      const message = caught instanceof Error ? caught.message : "Registration failed.";
+      setError(message);
+      notify(message, "error");
     } finally {
       setLoading(false);
     }

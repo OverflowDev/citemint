@@ -1,9 +1,9 @@
-import { getAddress, isAddress, recoverMessageAddress } from "viem";
+import { getAddress, isAddress, recoverMessageAddress, verifyTypedData } from "viem";
 import { z } from "zod";
-import { hashQuestion } from "@/lib/agent-authorization";
+import { hashQuestion, SPEND_AUTHORIZATION_TYPES, spendAuthorizationDomain, spendAuthorizationMessage } from "@/lib/agent-authorization";
 import { db } from "@/lib/db";
 import { generateAnswer, rankSources, type RankedSource } from "@/lib/agent";
-import { configuredPaymentMode, getPaymentAdapter } from "@/lib/payment";
+import { configuredPaymentMode, getPaymentAdapter, isOnchainMode, type CitationVoucher } from "@/lib/payment";
 import { usdcToMicros } from "@/lib/money";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
@@ -15,7 +15,7 @@ const inputSchema = z.object({
   signature: z.string().optional(),
 });
 
-async function verifyAuthorization(input: z.infer<typeof inputSchema>, maxBudgetMicros: number) {
+async function verifyAuthorization(input: z.infer<typeof inputSchema>, maxBudgetMicros: number, mode: string) {
   if (!input.walletAddress || !isAddress(input.walletAddress) || !input.authorizationId || !input.signature) {
     throw new Error("Connect your payer wallet and sign this question before running the onchain agent.");
   }
@@ -25,10 +25,26 @@ async function verifyAuthorization(input: z.infer<typeof inputSchema>, maxBudget
   if (record.walletAddress.toLowerCase() !== walletAddress.toLowerCase() || record.questionHash !== hashQuestion(input.question) || record.maxBudgetMicros !== maxBudgetMicros) {
     throw new Error("The signed authorization does not match this question and budget.");
   }
-  const recovered = await recoverMessageAddress({ message: record.message, signature: input.signature as `0x${string}` });
-  if (recovered.toLowerCase() !== walletAddress.toLowerCase()) throw new Error("The authorization signature does not match the payer wallet.");
+
+  let voucher: CitationVoucher | undefined;
+  if (mode === "contract-v2") {
+    const deadlineUnix = Math.floor(record.expiresAt.getTime() / 1000);
+    const valid = await verifyTypedData({
+      address: walletAddress,
+      domain: spendAuthorizationDomain(),
+      types: SPEND_AUTHORIZATION_TYPES,
+      primaryType: "SpendAuthorization",
+      message: spendAuthorizationMessage({ walletAddress, questionHash: record.questionHash as `0x${string}`, maxTotalMicros: record.maxBudgetMicros, deadlineUnix, nonce: record.nonce as `0x${string}` }),
+      signature: input.signature as `0x${string}`,
+    });
+    if (!valid) throw new Error("The authorization signature does not match the payer wallet.");
+    voucher = { payer: walletAddress, questionHash: record.questionHash, maxTotalMicros: record.maxBudgetMicros, deadlineUnix, nonce: record.nonce, signature: input.signature };
+  } else {
+    const recovered = await recoverMessageAddress({ message: record.message, signature: input.signature as `0x${string}` });
+    if (recovered.toLowerCase() !== walletAddress.toLowerCase()) throw new Error("The authorization signature does not match the payer wallet.");
+  }
   // Note: consumption is deferred so it can happen atomically with question creation (see POST).
-  return { record, walletAddress };
+  return { record, walletAddress, voucher };
 }
 
 export async function POST(request: Request) {
@@ -38,14 +54,15 @@ export async function POST(request: Request) {
     const input = inputSchema.parse(await request.json());
     const maxBudgetMicros = usdcToMicros(input.maxBudget);
     const mode = configuredPaymentMode();
-    const authorization = mode === "contract" ? await verifyAuthorization(input, maxBudgetMicros) : null;
+    const onchain = isOnchainMode(mode);
+    const authorization = onchain ? await verifyAuthorization(input, maxBudgetMicros, mode) : null;
     const payerWallet = authorization?.walletAddress || input.walletAddress || process.env.AGENT_WALLET_ADDRESS || "";
     const allSources = await db.source.findMany({ include: { creator: true } });
     if (!allSources.length) throw new Error("No sources are indexed yet. Register a source first.");
 
     const adapter = getPaymentAdapter();
     const availableBalance = await adapter.getBalance(payerWallet);
-    if (mode === "contract" && availableBalance <= 0) throw new Error("Your CiteMint escrow balance is empty. Deposit Arc Testnet USDC first.");
+    if (onchain && availableBalance <= 0) throw new Error("Your CiteMint escrow balance is empty. Deposit Arc Testnet USDC first.");
     const ranked = rankSources(input.question, allSources);
     const candidates = ranked.filter((source) => source.score > 0);
     const pool = candidates.length >= 2 ? candidates : ranked;
@@ -74,7 +91,7 @@ export async function POST(request: Request) {
           answer: "",
           totalSpentMicros: 0,
           paymentMode: mode,
-          network: mode === "contract" ? "arc-testnet" : null,
+          network: onchain ? "arc-testnet" : null,
           authorizationId: authorization?.record.id,
         },
       });
@@ -89,6 +106,7 @@ export async function POST(request: Request) {
         sourceId: source.id,
         questionId: question.id,
         authorizationId: authorization?.record.id,
+        voucher: authorization?.voucher,
       });
       const payment = await db.citationPayment.create({
         data: {

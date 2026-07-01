@@ -18,7 +18,9 @@
     "test-wallets": "node scripts/generate-test-wallets.mjs",
     "admin-wallet": "node scripts/generate-admin-wallet.mjs",
     "contract:compile": "node scripts/compile-contract.mjs",
-    "contract:deploy": "npm run contract:compile && node --env-file=.env scripts/deploy-contract.mjs"
+    "contract:deploy": "npm run contract:compile && node --env-file=.env scripts/deploy-contract.mjs",
+    "contract:compile:v2": "node scripts/compile-contract.mjs CiteMintEscrowV2",
+    "contract:deploy:v2": "npm run contract:compile:v2 && node --env-file=.env scripts/deploy-contract.mjs CiteMintEscrowV2"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

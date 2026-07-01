@@ -12,7 +12,9 @@ import { arcTestnet } from "viem/chains";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
-const artifactPath = resolve(root, "contracts/artifacts/CiteMintEscrow.json");
+const contractName = process.argv[2] || "CiteMintEscrow";
+const envKey = contractName === "CiteMintEscrowV2" ? "NEXT_PUBLIC_CITEMINT_ESCROW_V2_ADDRESS" : "NEXT_PUBLIC_CITEMINT_ESCROW_ADDRESS";
+const artifactPath = resolve(root, `contracts/artifacts/${contractName}.json`);
 const envPath = resolve(root, ".env");
 
 function required(name) {
@@ -31,9 +33,10 @@ function parseFeeBps() {
 
 async function saveContractAddress(address) {
   let contents = await readFile(envPath, "utf8");
-  const line = `NEXT_PUBLIC_CITEMINT_ESCROW_ADDRESS="${address}"`;
-  if (/^NEXT_PUBLIC_CITEMINT_ESCROW_ADDRESS=.*$/m.test(contents)) {
-    contents = contents.replace(/^NEXT_PUBLIC_CITEMINT_ESCROW_ADDRESS=.*$/m, line);
+  const line = `${envKey}="${address}"`;
+  const pattern = new RegExp(`^${envKey}=.*$`, "m");
+  if (pattern.test(contents)) {
+    contents = contents.replace(pattern, line);
   } else {
     contents = `${contents.trimEnd()}\n${line}\n`;
   }
@@ -80,9 +83,9 @@ async function main() {
   }
 
   await saveContractAddress(receipt.contractAddress);
-  console.log(`CiteMintEscrow: ${receipt.contractAddress}`);
+  console.log(`${contractName}: ${receipt.contractAddress}`);
   console.log(`Explorer: https://testnet.arcscan.app/address/${receipt.contractAddress}`);
-  console.log("Saved NEXT_PUBLIC_CITEMINT_ESCROW_ADDRESS in .env");
+  console.log(`Saved ${envKey} in .env`);
 }
 
 main().catch((error) => {
