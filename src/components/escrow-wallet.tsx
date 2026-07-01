@@ -96,7 +96,7 @@ export function EscrowWallet() {
   return <Card className="overflow-hidden">
     <div className="flex items-center justify-between border-b bg-[#fbfcfb] px-5 py-4">
       <div><p className="text-sm font-semibold text-slate-800">Your Arc escrow</p><p className="mt-1 text-[11px] text-slate-400">Deposit test USDC before asking the agent</p></div>
-      {address ? <button onClick={() => { void refresh(); void refreshEscrowBalance(); }} className="button button-outline !min-h-9 !px-3"><RefreshCw size={13} />{shortWallet(address)}</button> : <button onClick={() => { void connect().then(() => switchToArc()).catch((caught) => notify(friendlyError(caught, "We could not connect your wallet."), "error")); }} disabled={connecting} className="button button-dark !min-h-9 !px-3">{connecting ? <LoaderCircle size={13} className="animate-spin" /> : <Wallet size={13} />}Connect wallet</button>}
+      {address ? <button onClick={() => { void refresh(); void refreshEscrowBalance(); }} className="button button-outline min-h-9! px-3!"><RefreshCw size={13} />{shortWallet(address)}</button> : <button onClick={() => { void connect().then(() => switchToArc()).catch((caught) => notify(friendlyError(caught, "We could not connect your wallet."), "error")); }} disabled={connecting} className="button button-dark min-h-9! px-3!">{connecting ? <LoaderCircle size={13} className="animate-spin" /> : <Wallet size={13} />}Connect wallet</button>}
     </div>
     <div className="p-5">
       {!isArc && address && <button onClick={switchToArc} className="mb-4 w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">Switch to Arc Testnet</button>}

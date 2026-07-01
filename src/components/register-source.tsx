@@ -100,7 +100,7 @@ export function RegisterSource() {
     <PageIntro eyebrow="Creator onboarding" title="Prove the wallet. Publish the source." description="Anyone can join CiteMint. A one-time signature proves that the payout wallet belongs to the creator—without exposing its private key or approving a transaction." />
     <div className="grid gap-5 xl:grid-cols-[1fr_.58fr]">
       <Card className="p-6 md:p-8">
-        {created ? <div className="grid min-h-[520px] place-items-center text-center"><div className="max-w-md"><CheckCircle2 size={48} className="mx-auto text-emerald-600" /><h2 className="mt-5 text-2xl font-semibold text-slate-800">Source registered</h2><p className="mt-2 text-sm text-slate-500"><strong>{created.title}</strong> is now searchable and linked to a verified payout wallet.</p>
+        {created ? <div className="grid min-h-130 place-items-center text-center"><div className="max-w-md"><CheckCircle2 size={48} className="mx-auto text-emerald-600" /><h2 className="mt-5 text-2xl font-semibold text-slate-800">Source registered</h2><p className="mt-2 text-sm text-slate-500"><strong>{created.title}</strong> is now searchable and linked to a verified payout wallet.</p>
           <div className={`mt-4 rounded-xl border p-3 text-left text-xs leading-5 ${created.ingested ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
             <p className="font-semibold">{created.ingested ? "✓ Fetched from the article URL" : "Used your fallback summary"}</p>
             <p className="mt-1 opacity-80">{created.ingested ? "CiteMint pulled the title and text from the page." : "The URL could not be fetched (blocked, private, or no readable text), so your pasted summary was indexed instead."}</p>
