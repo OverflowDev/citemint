@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  name              String
+  walletAddress     String   @unique
+  demoBalanceMicros Int      @default(500000)
+  createdAt         DateTime @default(now())
+}
+
+model Creator {
+  id                       String            @id @default(cuid())
+  name                     String
+  walletAddress            String            @unique
+  walletVerifiedAt         DateTime?
+  walletVerificationMethod String?
+  createdAt                DateTime          @default(now())
+  sources                  Source[]
+  payments                 CitationPayment[]
+}
+
+model WalletChallenge {
+  id            String    @id @default(cuid())
+  walletAddress String
+  nonce         String    @unique
+  message       String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([walletAddress])
+  @@index([expiresAt])
+}
+
+model Source {
+  id                  String            @id @default(cuid())
+  creatorId           String
+  title               String
+  url                 String            @unique
+  content             String
+  excerpt             String
+  citationPriceMicros Int
+  tags                String
+  createdAt           DateTime          @default(now())
+  creator             Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  payments            CitationPayment[]
+}
+
+model AgentQuestion {
+  id               String              @id @default(cuid())
+  question         String
+  payerWallet      String?
+  maxBudgetMicros  Int
+  answer           String
+  totalSpentMicros Int                 @default(0)
+  paymentMode      String              @default("mock")
+  network          String?
+  authorizationId  String?             @unique
+  createdAt        DateTime            @default(now())
+  authorization    AgentAuthorization? @relation(fields: [authorizationId], references: [id], onDelete: SetNull)
+  payments         CitationPayment[]
+
+  @@index([payerWallet])
+}
+
+model AgentAuthorization {
+  id              String         @id @default(cuid())
+  walletAddress   String
+  questionHash    String
+  maxBudgetMicros Int
+  nonce           String         @unique
+  message         String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime       @default(now())
+  question        AgentQuestion?
+
+  @@index([walletAddress])
+  @@index([expiresAt])
+}
+
+model CitationPayment {
+  id              String        @id @default(cuid())
+  questionId      String
+  sourceId        String
+  creatorId       String
+  amountMicros    Int
+  status          String
+  txHash          String?
+  receiptId       String        @unique @map("mockReceiptId")
+  paymentId       String?       @unique
+  chainId         Int?
+  contractAddress String?
+  blockNumber     String?
+  selectionReason String
+  createdAt       DateTime      @default(now())
+  question        AgentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  source          Source        @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  creator         Creator       @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+
+  @@index([questionId])
+  @@index([creatorId])
+}
