@@ -2,11 +2,12 @@ import { z } from "zod";
 import { getAddress, verifyMessage, type Hex } from "viem";
 import { db } from "@/lib/db";
 import { usdcToMicros } from "@/lib/money";
+import { MAX_CITATION_PRICE_USDC, MIN_USDC } from "@/lib/limits";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const patchSchema = z.object({
   title: z.string().trim().min(3).max(200).optional(),
-  price: z.coerce.number().min(0.000001).max(0.1).optional(),
+  price: z.coerce.number().min(MIN_USDC).max(MAX_CITATION_PRICE_USDC).optional(),
   tags: z.string().trim().max(160).optional(),
   walletChallengeId: z.string().cuid(),
   walletSignature: z.string().regex(/^0x[a-fA-F0-9]+$/),

@@ -5,11 +5,12 @@ import { db } from "@/lib/db";
 import { generateAnswer, rankSources, type RankedSource } from "@/lib/agent";
 import { configuredPaymentMode, getPaymentAdapter, isOnchainMode, type CitationVoucher } from "@/lib/payment";
 import { usdcToMicros } from "@/lib/money";
+import { MAX_BUDGET_USDC, MAX_SOURCES_PER_RUN, MIN_USDC } from "@/lib/limits";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const inputSchema = z.object({
   question: z.string().trim().min(8, "Ask a little more detail so the agent can research it.").max(500),
-  maxBudget: z.coerce.number().min(0.000001).max(0.5),
+  maxBudget: z.coerce.number().min(MIN_USDC).max(MAX_BUDGET_USDC),
   walletAddress: z.string().optional(),
   authorizationId: z.string().optional(),
   signature: z.string().optional(),
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     let remaining = Math.min(maxBudgetMicros, availableBalance);
     const selected = [];
     for (const source of pool) {
-      if (selected.length >= 4) break;
+      if (selected.length >= MAX_SOURCES_PER_RUN) break;
       if (source.citationPriceMicros <= remaining) {
         selected.push(source);
         remaining -= source.citationPriceMicros;

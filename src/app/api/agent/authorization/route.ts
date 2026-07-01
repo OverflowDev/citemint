@@ -3,13 +3,14 @@ import { z } from "zod";
 import { createAuthorizationMessage, createSpendAuthorization } from "@/lib/agent-authorization";
 import { db } from "@/lib/db";
 import { usdcToMicros } from "@/lib/money";
+import { MAX_BUDGET_USDC, MIN_USDC } from "@/lib/limits";
 import { configuredPaymentMode } from "@/lib/payment";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const schema = z.object({
   walletAddress: z.string(),
   question: z.string().trim().min(8).max(500),
-  maxBudget: z.coerce.number().min(0.000001).max(0.5),
+  maxBudget: z.coerce.number().min(MIN_USDC).max(MAX_BUDGET_USDC),
 });
 
 export async function POST(request: Request) {

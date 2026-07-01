@@ -7,6 +7,7 @@ import { useArcWallet } from "@/components/arc-wallet-provider";
 import { EscrowWallet } from "@/components/escrow-wallet";
 import { Badge, Card, PageIntro } from "@/components/ui";
 import { formatUsdc, shortWallet } from "@/lib/money";
+import { MAX_BUDGET_USDC } from "@/lib/limits";
 import { friendlyError } from "@/lib/friendly-error";
 
 type Result = {
@@ -22,7 +23,7 @@ const demoQuestion = "How can nanopayments help independent writers and AI agent
 export function AskAgent() {
   const { address, isArc, escrowBalance, refreshEscrowBalance, switchToArc, signMessage, signTypedData, notify } = useArcWallet();
   const [question, setQuestion] = useState(demoQuestion);
-  const [budget, setBudget] = useState("0.01");
+  const [budget, setBudget] = useState("0.2");
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
@@ -71,7 +72,7 @@ export function AskAgent() {
         <EscrowWallet />
         <Card className="p-6"><form onSubmit={runAgent} className="space-y-5">
           <div><label className="label" htmlFor="question">Research question</label><textarea id="question" className="input min-h-32 resize-none leading-6" value={question} onChange={(event) => setQuestion(event.target.value)} /></div>
-          <div><div className="mb-2 flex justify-between"><label className="label mb-0" htmlFor="budget">Maximum authorized spend</label><span className="text-xs font-bold text-[#39745e]">${Number(budget || 0).toFixed(4)} USDC</span></div><input id="budget" type="range" min="0.0001" max="0.02" step="0.0001" value={budget} onChange={(event) => setBudget(event.target.value)} className="w-full accent-[#2e7256]" /><div className="mt-1 flex justify-between text-[10px] text-slate-400"><span>$0.0001</span><span>$0.02</span></div></div>
+          <div><div className="mb-2 flex justify-between"><label className="label mb-0" htmlFor="budget">Maximum authorized spend</label><span className="text-xs font-bold text-[#39745e]">${Number(budget || 0).toFixed(4)} USDC</span></div><input id="budget" type="range" min="0.001" max={MAX_BUDGET_USDC} step="0.001" value={budget} onChange={(event) => setBudget(event.target.value)} className="w-full accent-[#2e7256]" /><div className="mt-1 flex justify-between text-[10px] text-slate-400"><span>$0.001</span><span>${MAX_BUDGET_USDC.toFixed(2)}</span></div></div>
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5 text-xs leading-5 text-emerald-800"><strong>One signature, one question:</strong> your authorization is bound to this question, wallet, budget and a ten-minute expiry. It cannot approve tokens or be reused.</div>
           <button disabled={loading || !address || escrowBalance <= 0n} className="button button-dark w-full">{loading ? <><LoaderCircle size={16} className="animate-spin" />Settling on Arc…</> : !address ? <><WalletCards size={16} />Connect wallet from header</> : escrowBalance <= 0n ? <><WalletCards size={16} />Deposit USDC to continue</> : <><Sparkles size={16} />Authorize and run agent<ArrowRight size={15} /></>}</button>
           <p className="text-center text-[11px] text-slate-400">{address ? `${shortWallet(address)} · ${isArc ? "Arc Testnet" : "switch network required"}` : "Wallet connection required"}</p>

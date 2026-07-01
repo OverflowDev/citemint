@@ -6,6 +6,7 @@ import { ARC_EXPLORER } from "@/lib/arc-contract";
 import { useArcWallet } from "@/components/arc-wallet-provider";
 import { Badge, Card } from "@/components/ui";
 import { formatUsdc, microsToUsdc, shortWallet } from "@/lib/money";
+import { MAX_CITATION_PRICE_USDC, MIN_USDC } from "@/lib/limits";
 import { friendlyError } from "@/lib/friendly-error";
 
 type Earnings = {
@@ -116,7 +117,7 @@ export function CreatorEarnings() {
         <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-800">Edit source</p><button onClick={() => setEditing(null)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button></div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2"><label className="label" htmlFor="edit-title">Title</label><input id="edit-title" className="input" value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} /></div>
-          <div><label className="label" htmlFor="edit-price">Price per citation (USDC)</label><input id="edit-price" className="input" type="number" min="0.000001" max="0.1" step="0.000001" value={editing.price} onChange={(event) => setEditing({ ...editing, price: event.target.value })} /></div>
+          <div><label className="label" htmlFor="edit-price">Price per citation (USDC)</label><input id="edit-price" className="input" type="number" min={MIN_USDC} max={MAX_CITATION_PRICE_USDC} step="0.000001" value={editing.price} onChange={(event) => setEditing({ ...editing, price: event.target.value })} /></div>
           <div><label className="label" htmlFor="edit-tags">Topics</label><input id="edit-tags" className="input" value={editing.tags} onChange={(event) => setEditing({ ...editing, tags: event.target.value })} placeholder="journalism, AI, research" /></div>
         </div>
         <p className="mt-3 text-[11px] text-slate-400">Saving requires a one-time signature from your creator wallet. No transaction is sent.</p>

@@ -3,13 +3,14 @@ import { getAddress, verifyMessage, type Hex } from "viem";
 import { db } from "@/lib/db";
 import { ingestUrl } from "@/lib/source-ingest";
 import { usdcToMicros } from "@/lib/money";
+import { MAX_CITATION_PRICE_USDC, MIN_USDC } from "@/lib/limits";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const inputSchema = z.object({
   creatorName: z.string().trim().min(2).max(80),
   walletAddress: z.string().trim().regex(/^0x[a-fA-F0-9]{40}$/, "Enter a valid EVM wallet address."),
   url: z.string().url(),
-  price: z.coerce.number().min(0.000001).max(0.1),
+  price: z.coerce.number().min(MIN_USDC).max(MAX_CITATION_PRICE_USDC),
   tags: z.string().trim().max(160).default("independent publishing"),
   summary: z.string().trim().max(20000).optional(),
   walletChallengeId: z.string().cuid(),
