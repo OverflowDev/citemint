@@ -11,7 +11,7 @@ const inputSchema = z.object({
   url: z.string().url(),
   price: z.coerce.number().min(0.000001).max(0.1),
   tags: z.string().trim().max(160).default("independent publishing"),
-  summary: z.string().trim().max(2000).optional(),
+  summary: z.string().trim().max(20000).optional(),
   walletChallengeId: z.string().cuid(),
   walletSignature: z.string().regex(/^0x[a-fA-F0-9]+$/)
 });
@@ -47,10 +47,12 @@ export async function POST(request: Request) {
     const validSignature = await verifyMessage({ address: walletAddress, message: challenge.message, signature: input.walletSignature as Hex });
     if (!validSignature) throw new Error("Wallet signature could not be verified.");
     let article: { title: string; content: string; excerpt: string };
+    let ingested = true;
     try {
       article = await ingestUrl(input.url);
     } catch (error) {
       if (!input.summary) throw error;
+      ingested = false;
       const hostname = new URL(input.url).hostname.replace(/^www\./, "");
       article = { title: `Article from ${hostname}`, content: input.summary, excerpt: input.summary.slice(0, 240) };
     }
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
         include: { creator: true }
       });
     });
-    return Response.json(source, { status: 201 });
+    return Response.json({ ...source, ingested, excerpt: source.excerpt }, { status: 201 });
   } catch (error) {
     const message = error instanceof z.ZodError ? error.issues[0]?.message : error instanceof Error ? error.message : "Could not register this source.";
     return Response.json({ error: message }, { status: 400 });

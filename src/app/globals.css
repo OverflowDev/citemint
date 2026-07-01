@@ -40,7 +40,7 @@ body {
   .input:focus { border-color: #7c9c8e; box-shadow: 0 0 0 3px rgba(75, 127, 105, .1); }
 }
 .label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 650; color: #465367; }
-.badge { display: inline-flex; align-items: center; border-radius: 999px; background: #f0f2f5; padding: 4px 8px; font-size: 10px; font-weight: 700; letter-spacing: .035em; text-transform: uppercase; color: #697487; }
+.badge { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; border-radius: 999px; background: #f0f2f5; padding: 4px 8px; font-size: 10px; font-weight: 700; letter-spacing: .035em; text-transform: uppercase; color: #697487; }
 .badge-green { background: #e5f8eb; color: #23724b; }
 .badge-amber { background: #fff2d7; color: #9a6412; }
 .badge-purple { background: #f0ebff; color: #7048bb; }
