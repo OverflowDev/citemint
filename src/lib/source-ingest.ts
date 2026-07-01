@@ -57,13 +57,20 @@ async function assertPublicUrl(rawUrl: string) {
 
 export async function ingestUrl(rawUrl: string) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  // Browser-like headers get past naive UA filters. Note: many publishers (e.g. Medium) still block
+  // datacenter IPs, so a server fetch from a host like Vercel may 403 even when it works from a laptop.
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
   try {
     let current = await assertPublicUrl(rawUrl);
     let response: Response | undefined;
     // Follow redirects manually so every hop is re-validated against private targets.
     for (let hop = 0; hop < 4; hop += 1) {
-      response = await fetch(current, { signal: controller.signal, redirect: "manual", headers: { "User-Agent": "CitationTollDemo/1.0" } });
+      response = await fetch(current, { signal: controller.signal, redirect: "manual", headers });
       const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
       if (!location) break;
       current = await assertPublicUrl(new URL(location, current).toString());

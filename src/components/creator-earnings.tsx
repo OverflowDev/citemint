@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Bot, CircleDollarSign, ExternalLink, FileText, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
+import { BarChart3, Bot, CircleDollarSign, ExternalLink, FileText, LoaderCircle, Pencil, RefreshCw, Wallet, X } from "lucide-react";
 import { ARC_EXPLORER } from "@/lib/arc-contract";
 import { useArcWallet } from "@/components/arc-wallet-provider";
 import { Badge, Card } from "@/components/ui";
-import { formatUsdc, shortWallet } from "@/lib/money";
+import { formatUsdc, microsToUsdc, shortWallet } from "@/lib/money";
 import { friendlyError } from "@/lib/friendly-error";
 
 type Earnings = {
@@ -16,7 +16,7 @@ type Earnings = {
   sourceCount: number;
   citationCount: number;
   distinctAgents: number;
-  perSource: { id: string; title: string; url: string; timesCited: number; totalMicros: number; lastCitedAt: string }[];
+  perSource: { id: string; title: string; url: string; tags: string; priceMicros: number; timesCited: number; totalMicros: number; lastCitedAt: string | null }[];
   ledger: { id: string; amountMicros: number; createdAt: string; txHash: string | null; receiptId: string; source: { title: string; url: string }; question: string }[];
 };
 
@@ -24,9 +24,11 @@ const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", 
 const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
 
 export function CreatorEarnings() {
-  const { address, connect, connecting, notify } = useArcWallet();
+  const { address, connect, connecting, signMessage, notify } = useArcWallet();
   const [data, setData] = useState<Earnings | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; title: string; price: string; tags: string } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (wallet: string) => {
     setLoading(true);
@@ -41,6 +43,32 @@ export function CreatorEarnings() {
       setLoading(false);
     }
   }, [notify]);
+
+  async function saveEdit() {
+    if (!editing || !address) return;
+    setSaving(true);
+    try {
+      // Prove ownership of the source's creator wallet with a fresh single-use signature.
+      const challengeResponse = await fetch("/api/wallet/challenge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ walletAddress: address }) });
+      const challenge = await challengeResponse.json();
+      if (!challengeResponse.ok) throw new Error(challenge.error || "Could not start wallet verification.");
+      const walletSignature = await signMessage(challenge.message);
+      const response = await fetch(`/api/sources/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editing.title, price: Number(editing.price), tags: editing.tags, walletChallengeId: challenge.challengeId, walletSignature }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not update the source.");
+      notify("Source updated.", "success");
+      setEditing(null);
+      await load(address);
+    } catch (caught) {
+      notify(friendlyError(caught, "Could not update the source."), "error");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -81,8 +109,19 @@ export function CreatorEarnings() {
     <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">{stats.map((stat) => <div key={stat.label} className="rounded-xl bg-slate-50 p-4"><div className="flex items-center justify-between"><p className="text-[10px] uppercase tracking-wider text-slate-400">{stat.label}</p><stat.icon size={15} className="text-[#39745e]" /></div><p className="mt-2 text-2xl font-semibold text-slate-800">{stat.value}</p><p className="mt-0.5 text-[10px] text-slate-400">{stat.note}</p></div>)}</div>
 
     {data.perSource.length > 0 && <div className="border-t p-5">
-      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Earnings by source</p>
-      <div className="table-wrap"><table><thead><tr><th>Source</th><th>Times cited</th><th>Last cited</th><th>Earned</th></tr></thead><tbody>{data.perSource.map((source) => <tr key={source.id}><td className="max-w-xs truncate font-semibold text-slate-650"><FileText size={13} className="mr-2 inline text-slate-400" /><a href={source.url} target="_blank" rel="noreferrer" className="hover:underline">{source.title}</a></td><td>{source.timesCited}</td><td className="text-xs text-slate-500">{dayFmt.format(new Date(source.lastCitedAt))}</td><td className="font-bold text-[#39745e]">{formatUsdc(source.totalMicros)}</td></tr>)}</tbody></table></div>
+      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Your sources</p>
+      <div className="table-wrap"><table><thead><tr><th>Source</th><th>Price</th><th>Cited</th><th>Last cited</th><th>Earned</th><th /></tr></thead><tbody>{data.perSource.map((source) => <tr key={source.id}><td className="max-w-xs truncate font-semibold text-slate-650"><FileText size={13} className="mr-2 inline text-slate-400" /><a href={source.url} target="_blank" rel="noreferrer" className="hover:underline">{source.title}</a></td><td className="text-xs text-slate-600">{formatUsdc(source.priceMicros)}</td><td>{source.timesCited}</td><td className="whitespace-nowrap text-xs text-slate-500">{source.lastCitedAt ? dayFmt.format(new Date(source.lastCitedAt)) : "—"}</td><td className="font-bold text-[#39745e]">{formatUsdc(source.totalMicros)}</td><td className="text-right"><button onClick={() => setEditing({ id: source.id, title: source.title, price: microsToUsdc(source.priceMicros).toString(), tags: source.tags })} className="button button-outline !min-h-8 !px-2.5 text-xs"><Pencil size={12} />Edit</button></td></tr>)}</tbody></table></div>
+
+      {editing && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-800">Edit source</p><button onClick={() => setEditing(null)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2"><label className="label" htmlFor="edit-title">Title</label><input id="edit-title" className="input" value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} /></div>
+          <div><label className="label" htmlFor="edit-price">Price per citation (USDC)</label><input id="edit-price" className="input" type="number" min="0.000001" max="0.1" step="0.000001" value={editing.price} onChange={(event) => setEditing({ ...editing, price: event.target.value })} /></div>
+          <div><label className="label" htmlFor="edit-tags">Topics</label><input id="edit-tags" className="input" value={editing.tags} onChange={(event) => setEditing({ ...editing, tags: event.target.value })} placeholder="journalism, AI, research" /></div>
+        </div>
+        <p className="mt-3 text-[11px] text-slate-400">Saving requires a one-time signature from your creator wallet. No transaction is sent.</p>
+        <div className="mt-3 flex gap-2"><button onClick={() => { void saveEdit(); }} disabled={saving} className="button button-dark !min-h-9">{saving ? <LoaderCircle size={14} className="animate-spin" /> : null}Sign & save</button><button onClick={() => setEditing(null)} disabled={saving} className="button button-outline !min-h-9">Cancel</button></div>
+      </div>}
     </div>}
 
     <div className="border-t p-5">

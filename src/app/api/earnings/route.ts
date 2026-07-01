@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const creator = await db.creator.findUnique({
     where: { walletAddress },
     include: {
-      sources: { select: { id: true } },
+      sources: { select: { id: true, title: true, url: true, tags: true, citationPriceMicros: true }, orderBy: { createdAt: "desc" } },
       payments: {
         where: { status: "paid" },
         include: {
@@ -33,16 +33,18 @@ export async function GET(request: Request) {
   // (contract mode) and falling back to the question id (mock mode).
   const distinctAgents = new Set(payments.map((payment) => payment.question.payerWallet?.toLowerCase() ?? payment.questionId)).size;
 
-  const perSourceMap = new Map<string, { id: string; title: string; url: string; timesCited: number; totalMicros: number; lastCitedAt: Date }>();
+  // Start from every source the creator owns (so uncited ones are still listed and editable), then fold
+  // in payment stats.
+  const perSourceMap = new Map<string, { id: string; title: string; url: string; tags: string; priceMicros: number; timesCited: number; totalMicros: number; lastCitedAt: string | null }>();
+  for (const source of creator.sources) {
+    perSourceMap.set(source.id, { id: source.id, title: source.title, url: source.url, tags: source.tags, priceMicros: source.citationPriceMicros, timesCited: 0, totalMicros: 0, lastCitedAt: null });
+  }
   for (const payment of payments) {
-    const existing = perSourceMap.get(payment.source.id);
-    if (existing) {
-      existing.timesCited += 1;
-      existing.totalMicros += payment.amountMicros;
-      if (payment.createdAt > existing.lastCitedAt) existing.lastCitedAt = payment.createdAt;
-    } else {
-      perSourceMap.set(payment.source.id, { id: payment.source.id, title: payment.source.title, url: payment.source.url, timesCited: 1, totalMicros: payment.amountMicros, lastCitedAt: payment.createdAt });
-    }
+    const stat = perSourceMap.get(payment.sourceId);
+    if (!stat) continue;
+    stat.timesCited += 1;
+    stat.totalMicros += payment.amountMicros;
+    if (!stat.lastCitedAt || payment.createdAt > new Date(stat.lastCitedAt)) stat.lastCitedAt = payment.createdAt.toISOString();
   }
 
   return Response.json({
@@ -53,7 +55,7 @@ export async function GET(request: Request) {
     sourceCount: creator.sources.length,
     citationCount: payments.length,
     distinctAgents,
-    perSource: [...perSourceMap.values()].sort((a, b) => b.totalMicros - a.totalMicros),
+    perSource: [...perSourceMap.values()].sort((a, b) => b.totalMicros - a.totalMicros || (a.title < b.title ? -1 : 1)),
     ledger: payments.map((payment) => ({
       id: payment.id,
       amountMicros: payment.amountMicros,
