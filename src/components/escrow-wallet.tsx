@@ -65,12 +65,14 @@ export function EscrowWallet() {
       if (value > balances.wallet) throw new Error("Your wallet does not have enough Arc Testnet USDC.");
       const wallet = getWalletClient();
       const publicClient = getArcPublicClient();
+      let approved = false;
       if (balances.allowance < value) {
         notify("Confirm the USDC spending approval in your wallet.", "info");
         const approval = await wallet.writeContract({ account, chain: arcTestnet, address: ARC_USDC_ADDRESS, abi: usdcAbi, functionName: "approve", args: [ACTIVE_ESCROW_ADDRESS, value] });
         await publicClient.waitForTransactionReceipt({ hash: approval });
+        approved = true;
       }
-      notify("Approval confirmed. Now confirm the escrow deposit.", "info");
+      notify(approved ? "Approval confirmed. Now confirm the escrow deposit." : "Confirm the escrow deposit in your wallet.", "info");
       const hash = await wallet.writeContract({ account, chain: arcTestnet, address: ACTIVE_ESCROW_ADDRESS, abi: escrowAbi, functionName: "deposit", args: [value] });
       await publicClient.waitForTransactionReceipt({ hash });
       await Promise.all([refresh(), refreshEscrowBalance()]);
@@ -93,6 +95,12 @@ export function EscrowWallet() {
     finally { setBusy(""); }
   }
 
+  // Only the first (or an insufficient) approval needs an approve tx; if the standing allowance already
+  // covers the entered amount, the deposit is a single transaction.
+  let plannedDeposit = 0n;
+  try { plannedDeposit = parseUnits(amount || "0", 6); } catch { plannedDeposit = 0n; }
+  const needsApproval = plannedDeposit > balances.allowance;
+
   return <Card className="overflow-hidden">
     <div className="flex items-center justify-between border-b bg-[#fbfcfb] px-5 py-4">
       <div><p className="text-sm font-semibold text-slate-800">Your Arc escrow</p><p className="mt-1 text-[11px] text-slate-400">Deposit test USDC before asking the agent</p></div>
@@ -102,7 +110,7 @@ export function EscrowWallet() {
       {!isArc && address && <button onClick={switchToArc} className="mb-4 w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">Switch to Arc Testnet</button>}
       <div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-400">Wallet USDC</p><p className="mt-1 font-semibold text-slate-750">{Number(formatUnits(balances.wallet, 6)).toFixed(6)}</p></div><div className="rounded-xl bg-emerald-50 p-3"><p className="text-[10px] uppercase tracking-wider text-emerald-600">Available escrow</p><p className="mt-1 font-semibold text-emerald-800">{Number(formatUnits(balances.escrow, 6)).toFixed(6)}</p></div></div>
       <label className="label mt-4" htmlFor="escrow-amount">Amount (USDC)</label><input id="escrow-amount" className="input" type="number" min="0.000001" step="0.000001" value={amount} onChange={(event) => setAmount(event.target.value)} />
-      <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={deposit} disabled={!address || !!busy} className="button button-dark">{busy === "deposit" ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}Approve & deposit</button><button onClick={withdraw} disabled={!address || !!busy || balances.escrow === 0n} className="button button-outline">{busy === "withdraw" ? <LoaderCircle size={14} className="animate-spin" /> : null}Withdraw</button></div>
+      <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={deposit} disabled={!address || !!busy} className="button button-dark">{busy === "deposit" ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{needsApproval ? "Approve & deposit" : "Deposit"}</button><button onClick={withdraw} disabled={!address || !!busy || balances.escrow === 0n} className="button button-outline">{busy === "withdraw" ? <LoaderCircle size={14} className="animate-spin" /> : null}Withdraw</button></div>
       {busy && <p className="mt-3 text-xs font-medium text-slate-500">Waiting for Arc confirmation. Keep this page open…</p>}
       {ACTIVE_ESCROW_ADDRESS && <a className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-[#39745e]" href={`${ARC_EXPLORER}/address/${ACTIVE_ESCROW_ADDRESS}`} target="_blank" rel="noreferrer">View escrow on ArcScan <ExternalLink size={11} /></a>}
     </div>
